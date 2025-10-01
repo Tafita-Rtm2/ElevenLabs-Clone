@@ -1,0 +1,89 @@
+# Render.yaml for ElevenLabs-Clone
+
+# This blueprint defines the services and infrastructure needed to deploy
+# the full-stack ElevenLabs Clone application on Render.
+#
+# It includes:
+# 1. A PostgreSQL database for the frontend.
+# 2. A Next.js frontend web service.
+# 3. Three GPU-powered backend services for AI models, each running in Docker.
+#
+# Before deploying, ensure you have set up the required secret groups in your
+# Render account for AWS credentials and other sensitive keys.
+
+services:
+  # 1. PostgreSQL Database
+  # The database for the Next.js frontend application.
+  - name: elevenlabs-db
+    type: psql
+    psqlVersion: 15
+    plan: free # Change to a paid plan for production use
+
+  # 2. Frontend Web Service (Next.js)
+  # The main user-facing application.
+  - name: elevenlabs-frontend
+    type: web
+    env: node
+    plan: free # Change to a paid plan for production use
+    repo: https://github.com/BernieTv/ElevenLabs-Clone.git # Replace with your repo
+    rootDir: ./elevenlabs-clone-frontend
+    buildCommand: "npm install && npm run db:migrate && npm run build"
+    startCommand: "npm start"
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromService:
+          name: elevenlabs-db
+          type: psql
+          property: connectionString
+      - key: STYLETTS2_API_URL
+        fromService:
+          name: styletts2-api
+          type: pserv
+          property: url
+      - key: SEEDVC_API_URL
+        fromService:
+          name: seedvc-api
+          type: pserv
+          property: url
+      - key: MAKE_AN_AUDIO_API_URL
+        fromService:
+          name: make-an-audio-api
+          type: pserv
+          property: url
+      - fromGroup: elevenlabs-secrets # Secret group for API keys, AWS creds, etc.
+
+  # 3. Backend AI Services (GPU-powered)
+
+  # 3.1 StyleTTS2 API Service
+  - name: styletts2-api
+    type: pserv
+    env: docker
+    plan: "NVIDIA H100" # Or other suitable GPU plan like A100, T4
+    repo: https://github.com/BernieTv/ElevenLabs-Clone.git # Replace with your repo
+    dockerContext: ./StyleTTS2
+    dockerfilePath: ./Dockerfile.api
+    envVars:
+      - fromGroup: elevenlabs-secrets
+
+  # 3.2 SeedVC API Service
+  - name: seedvc-api
+    type: pserv
+    env: docker
+    plan: "NVIDIA H100" # Or other suitable GPU plan
+    repo: https://github.com/BernieTv/ElevenLabs-Clone.git # Replace with your repo
+    dockerContext: ./seed-vc
+    dockerfilePath: ./Dockerfile.api
+    envVars:
+      - fromGroup: elevenlabs-secrets
+
+  # 3.3 Make-An-Audio API Service
+  - name: make-an-audio-api
+    type: pserv
+    env: docker
+    plan: "NVIDIA H100" # Or other suitable GPU plan
+    repo: https://github.com/BernieTv/ElevenLabs-Clone.git # Replace with your repo
+    dockerContext: ./Make-An-Audio
+    dockerfilePath: ./Dockerfile.api
+    envVars:
+      - fromGroup: elevenlabs-secrets
