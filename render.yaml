@@ -1,36 +1,68 @@
-# Render.yaml for ElevenLabs-Clone
-
-# This blueprint defines the services and infrastructure needed to deploy
-# the full-stack ElevenLabs Clone application on Render.
+# =========================================================================
+# Render Blueprint for ElevenLabs Clone
+# =========================================================================
 #
-# It includes:
-# 1. A PostgreSQL database for the frontend.
-# 2. A Next.js frontend web service.
-# 3. Three GPU-powered backend services for AI models, each running in Docker.
+# This file provides a complete "Infrastructure as Code" setup to deploy
+# the entire ElevenLabs Clone project from your GitHub repository to Render.
 #
-# Before deploying, ensure you have set up the required secret groups in your
-# Render account for AWS credentials and other sensitive keys.
+# How to use this file:
+# 1. In the Render Dashboard, go to "Blueprints" and click "New Blueprint".
+# 2. Connect your GitHub account and select your repository:
+#    Tafita-Rtm2/ElevenLabs-Clone
+# 3. Render will automatically detect and use this `render.yaml` file.
+# 4. Create a "Secret Group" named `elevenlabs-secrets` in Render to store
+#    all your sensitive keys (see the list of required variables below).
+# 5. Click "Apply" and Render will build and deploy all services.
+#
+# ---
+#
+# Required secrets in the `elevenlabs-secrets` group:
+#
+# For the Frontend:
+# - NEXTAUTH_URL: The full URL of your frontend service (e.g., https://your-app-name.onrender.com)
+# - NEXTAUTH_SECRET: A strong secret key for session encryption.
+#
+# For all Backend Services (and Frontend for S3 uploads):
+# - AWS_ACCESS_KEY_ID: Your AWS IAM user access key.
+# - AWS_SECRET_ACCESS_KEY: Your AWS IAM user secret key.
+# - AWS_REGION: The AWS region for your S3 bucket (e.g., us-east-1).
+# - S3_BUCKET: The name of your S3 bucket (e.g., elevenlabs-clone).
+# - API_KEY: A secret key to protect your backend APIs.
+#
+# =========================================================================
 
 services:
-  # 1. PostgreSQL Database
-  # The database for the Next.js frontend application.
+  # -----------------------------------------------------------------------
+  # Service 1: PostgreSQL Database
+  # -----------------------------------------------------------------------
+  # This service provides the database required by the frontend for user
+  # authentication and data storage via Prisma.
+  # -----------------------------------------------------------------------
   - name: elevenlabs-db
     type: psql
     psqlVersion: 15
-    plan: free # Change to a paid plan for production use
+    plan: free
+    # Note: The 'free' plan is suitable for development/testing.
+    # For production, consider upgrading to a paid plan for better
+    # performance and automatic backups.
 
-  # 2. Frontend Web Service (Next.js)
-  # The main user-facing application.
+  # -----------------------------------------------------------------------
+  # Service 2: Frontend Web Service (Next.js)
+  # -----------------------------------------------------------------------
+  # This is the main user-facing application. It connects to the database
+  # and communicates with the backend AI services.
+  # -----------------------------------------------------------------------
   - name: elevenlabs-frontend
     type: web
     env: node
-    plan: free # Change to a paid plan for production use
-    repo: https://github.com/BernieTv/ElevenLabs-Clone.git # Replace with your repo
+    plan: starter # 'free' plan may be too slow; 'starter' is recommended.
+    repo: https://github.com/Tafita-Rtm2/ElevenLabs-Clone.git
     rootDir: ./elevenlabs-clone-frontend
     buildCommand: "npm install && npm run db:migrate && npm run build"
     startCommand: "npm start"
     healthCheckPath: /
     envVars:
+      # --- Connections to other services ---
       - key: DATABASE_URL
         fromService:
           name: elevenlabs-db
@@ -51,38 +83,49 @@ services:
           name: make-an-audio-api
           type: pserv
           property: url
-      - fromGroup: elevenlabs-secrets # Secret group for API keys, AWS creds, etc.
+      # --- Import all secrets ---
+      - fromGroup: elevenlabs-secrets
 
-  # 3. Backend AI Services (GPU-powered)
-
-  # 3.1 StyleTTS2 API Service
+  # -----------------------------------------------------------------------
+  # Service 3: StyleTTS2 API (GPU-powered)
+  # -----------------------------------------------------------------------
+  # Backend service for Text-to-Speech. Requires a GPU.
+  # -----------------------------------------------------------------------
   - name: styletts2-api
-    type: pserv
+    type: pserv # Private service, not exposed to the public internet
     env: docker
-    plan: "NVIDIA H100" # Or other suitable GPU plan like A100, T4
-    repo: https://github.com/BernieTv/ElevenLabs-Clone.git # Replace with your repo
+    plan: "T4" # GPU instance type. Others: A100, H100. T4 is a good starting point.
+    repo: https://github.com/Tafita-Rtm2/ElevenLabs-Clone.git
     dockerContext: ./StyleTTS2
     dockerfilePath: ./Dockerfile.api
     envVars:
       - fromGroup: elevenlabs-secrets
 
-  # 3.2 SeedVC API Service
+  # -----------------------------------------------------------------------
+  # Service 4: SeedVC API (GPU-powered)
+  # -----------------------------------------------------------------------
+  # Backend service for Voice Conversion. Requires a GPU.
+  # -----------------------------------------------------------------------
   - name: seedvc-api
     type: pserv
     env: docker
-    plan: "NVIDIA H100" # Or other suitable GPU plan
-    repo: https://github.com/BernieTv/ElevenLabs-Clone.git # Replace with your repo
+    plan: "T4"
+    repo: https://github.com/Tafita-Rtm2/ElevenLabs-Clone.git
     dockerContext: ./seed-vc
     dockerfilePath: ./Dockerfile.api
     envVars:
       - fromGroup: elevenlabs-secrets
 
-  # 3.3 Make-An-Audio API Service
+  # -----------------------------------------------------------------------
+  # Service 5: Make-An-Audio API (GPU-powered)
+  # -----------------------------------------------------------------------
+  # Backend service for Text-to-Audio generation. Requires a GPU.
+  # -----------------------------------------------------------------------
   - name: make-an-audio-api
     type: pserv
     env: docker
-    plan: "NVIDIA H100" # Or other suitable GPU plan
-    repo: https://github.com/BernieTv/ElevenLabs-Clone.git # Replace with your repo
+    plan: "T4"
+    repo: https://github.com/Tafita-Rtm2/ElevenLabs-Clone.git
     dockerContext: ./Make-An-Audio
     dockerfilePath: ./Dockerfile.api
     envVars:
